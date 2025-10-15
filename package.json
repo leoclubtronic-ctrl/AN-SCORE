@@ -1,0 +1,13 @@
+{
+  "name": "an-score",
+  "version": "1.0.0",
+  "description": "Monitoramento de jogos ao vivo e alertas de pressão ofensiva",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  }
+}
