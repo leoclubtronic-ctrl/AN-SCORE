@@ -1,63 +1,71 @@
-// 🟢 IMPORTA OS PACOTES NECESSÁRIOS
 import fetch from "node-fetch";
 
-// 🟡 SUA CHAVE DA API (vamos guardar segura no Render depois)
 const API_KEY = process.env.API_KEY;
 
-// 🟢 FUNÇÃO QUE PEGA OS DADOS DOS JOGOS AO VIVO
+// Função que busca jogos ao vivo
 async function getLiveMatches() {
   const response = await fetch("https://v3.football.api-sports.io/fixtures?live=all", {
-    headers: {
-      "x-apisports-key": API_KEY
-    }
+    headers: { "x-apisports-key": API_KEY }
   });
-
   const data = await response.json();
   return data.response;
 }
 
-// 🟡 FUNÇÃO QUE VERIFICA ATAQUES E CHUTES
-function analyzeTeamStats(match) {
-  const home = match.statistics?.[0]?.statistics || [];
-  const away = match.statistics?.[1]?.statistics || [];
+// Função para extrair valor de estatística
+function getStat(stats, name) {
+  const found = stats.find(s => s.type === name);
+  return found ? Number(found.value || 0) : 0;
+}
 
-  const getStat = (stats, name) => {
-    const found = stats.find(s => s.type === name);
-    return found ? Number(found.value || 0) : 0;
-  };
+// Função principal de análise
+function analyzeMatch(match) {
+  const homeStats = match.statistics?.[0]?.statistics || [];
+  const awayStats = match.statistics?.[1]?.statistics || [];
 
-  const homeShots = getStat(home, "Shots on Goal");
-  const awayShots = getStat(away, "Shots on Goal");
-  const homeAttacks = getStat(home, "Attacks");
-  const awayAttacks = getStat(away, "Attacks");
+  const homeAttacks = getStat(homeStats, "Attacks");
+  const awayAttacks = getStat(awayStats, "Attacks");
+  const homeDangerous = getStat(homeStats, "Dangerous Attacks");
+  const awayDangerous = getStat(awayStats, "Dangerous Attacks");
+  const homeShots = getStat(homeStats, "Shots on Goal");
+  const awayShots = getStat(awayStats, "Shots on Goal");
 
-  // 🟩 Define quando mandar alerta
-  if (homeShots >= 4 && homeAttacks >= 6) {
-    console.log(`⚠️ ${match.teams.home.name} está pressionando muito! ${homeShots} chutes e ${homeAttacks} ataques.`);
+  // Total de ataques perigosos no jogo
+  const totalDanger = homeDangerous + awayDangerous;
+  if (totalDanger === 0) return;
+
+  // Percentual de pressão ofensiva
+  const homePressure = Math.round((homeDangerous / totalDanger) * 100);
+  const awayPressure = Math.round((awayDangerous / totalDanger) * 100);
+
+  // Alerta se a pressão for muito alta
+  const PRESSURE_LIMIT = 65; // percentual mínimo para alerta
+
+  if (homePressure >= PRESSURE_LIMIT) {
+    console.log(`🔥 ${match.teams.home.name} em ALTA PRESSÃO! ${homePressure}% dos ataques perigosos. (${homeDangerous}x${awayDangerous})`);
   }
 
-  if (awayShots >= 4 && awayAttacks >= 6) {
-    console.log(`⚠️ ${match.teams.away.name} está pressionando muito! ${awayShots} chutes e ${awayAttacks} ataques.`);
+  if (awayPressure >= PRESSURE_LIMIT) {
+    console.log(`🔥 ${match.teams.away.name} em ALTA PRESSÃO! ${awayPressure}% dos ataques perigosos. (${awayDangerous}x${homeDangerous})`);
   }
 }
 
-// 🕒 FUNÇÃO PRINCIPAL
+// Função que monitora os jogos em tempo real
 async function monitorMatches() {
-  console.log("📡 Monitorando jogos em tempo real...");
+  console.log("📊 Atualizando estatísticas ao vivo...");
   const matches = await getLiveMatches();
 
   if (!matches.length) {
-    console.log("Nenhum jogo ao vivo agora.");
+    console.log("Nenhum jogo ao vivo no momento.\n");
     return;
   }
 
   for (const match of matches) {
-    analyzeTeamStats(match);
+    analyzeMatch(match);
   }
+
+  console.log("--------------------------------------------------\n");
 }
 
-// 🔁 REPETE A CADA 2 MINUTOS
-setInterval(monitorMatches, 2 * 60 * 1000);
-
-// Roda imediatamente ao iniciar
+// Atualiza a cada 90 segundos
+setInterval(monitorMatches, 90 * 1000);
 monitorMatches();
